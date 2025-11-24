@@ -6,6 +6,8 @@ interface LabelProps {
   bean: CoffeeBean;
   scale?: number;
   showBorder?: boolean;
+  weightInGrams?: number;
+  productionDate?: string;
 }
 
 // Dimensions in mm
@@ -14,31 +16,72 @@ const SIZES = {
   '60x85': { w: 60, h: 85 },
 };
 
-export const Label: React.FC<LabelProps> = ({ bean, scale = 1, showBorder = true }) => {
+export const Label: React.FC<LabelProps> = ({ bean, scale = 1, showBorder = true, weightInGrams, productionDate }) => {
   const sizeKey = bean.labelSize || '105x74';
   const { w, h } = SIZES[sizeKey];
+  const isScaled = scale !== 1;
 
-  const containerStyle: React.CSSProperties = {
+  const outerStyle: React.CSSProperties = {
+    width: `${isScaled ? w * scale : w}mm`,
+    height: `${isScaled ? h * scale : h}mm`,
+    position: 'relative',
+    overflow: isScaled ? 'hidden' : 'visible'
+  };
+
+  const innerStyle: React.CSSProperties = {
     width: `${w}mm`,
     height: `${h}mm`,
-    transform: `scale(${scale})`,
+    transform: isScaled ? `scale(${scale})` : undefined,
     transformOrigin: 'top left',
-    position: 'relative',
+    position: isScaled ? 'absolute' : 'relative',
+    top: 0,
+    left: 0,
     overflow: 'hidden',
     backgroundColor: 'white'
   };
 
-  // Metric Bar Component (1-5)
-  const MetricBar = ({ value, label }: { value: number, label: string }) => (
-    <div className="flex items-center gap-1 text-[8px] w-full">
-        <span className="w-6 text-right font-bold text-coffee-700 opacity-70">{label}</span>
-        <div className="flex-1 flex gap-0.5 h-1.5">
-            {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className={`flex-1 rounded-sm ${i <= value ? 'bg-coffee-600' : 'bg-gray-200'}`} />
-            ))}
+  const balanceValue = Math.max(-4, Math.min(4, bean.tasteBalance ?? 0));
+  const resolvedWeight = typeof weightInGrams === 'number' && weightInGrams > 0 ? `${weightInGrams}g` : '200g';
+  const resolvedDate = (() => {
+    if (!productionDate) return '';
+    const d = new Date(productionDate);
+    if (Number.isNaN(d.getTime())) return productionDate;
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}.${mm}.${dd}`;
+  })();
+
+  // Acid-Bitter Balance Bar
+  const BalanceBar = () => {
+    const segments = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
+    return (
+        <div className="flex flex-col gap-1 text-[8px] w-full">
+            <div className="flex justify-between text-[7px] text-coffee-500 tracking-wide font-semibold uppercase">
+                <span>Acidic</span>
+                <span>Balanced</span>
+                <span>Bitter</span>
+            </div>
+            <div className="flex gap-0.5 h-1.5">
+                {segments.map((seg) => {
+                    const isActive = balanceValue === 0 
+                        ? seg === 0 
+                        : balanceValue > 0 
+                            ? seg > 0 && seg <= balanceValue 
+                            : seg < 0 && seg >= balanceValue;
+                    const baseColor = seg === 0 ? 'bg-coffee-200' : (seg < 0 ? 'bg-amber-100' : 'bg-coffee-100');
+                    const activeColor = seg === 0 ? 'bg-coffee-500' : (seg < 0 ? 'bg-amber-500' : 'bg-coffee-700');
+                    return (
+                        <div 
+                            key={seg} 
+                            className={`flex-1 rounded-sm ${isActive ? activeColor : baseColor}`} 
+                        />
+                    );
+                })}
+            </div>
         </div>
-    </div>
-  );
+    );
+  };
 
   // Placeholder Flag (Circle)
   const FlagPlaceholder = () => (
@@ -56,6 +99,17 @@ export const Label: React.FC<LabelProps> = ({ bean, scale = 1, showBorder = true
 
   const Divider = () => (
       bean.showDivider ? <div className="w-full border-t border-coffee-200 my-1 opacity-60"></div> : <div className="my-1"></div>
+  );
+
+  const MetaBlock = ({ compact = false }: { compact?: boolean }) => (
+    <div className={`text-[8px] font-bold text-coffee-400 ${compact ? 'tracking-[0.1em]' : 'tracking-[0.2em]'}`}>
+        <div>NET WEIGHT {resolvedWeight}</div>
+        {resolvedDate && (
+            <div className="text-[7px] text-coffee-500 tracking-[0.15em] mt-0.5">
+                ROAST {resolvedDate}
+            </div>
+        )}
+    </div>
   );
 
   const renderContent = () => {
@@ -103,8 +157,8 @@ export const Label: React.FC<LabelProps> = ({ bean, scale = 1, showBorder = true
               <p className="font-serif italic text-[9px] text-coffee-500 leading-tight">
                 {bean.flavorEN || "Flavor Description"}
               </p>
-              <div className="mt-3 text-[8px] font-bold tracking-[0.2em] text-coffee-400">
-                NET WT. 200g
+              <div className="mt-3 flex flex-col items-center">
+                <MetaBlock compact />
               </div>
            </div>
         </div>
@@ -152,8 +206,8 @@ export const Label: React.FC<LabelProps> = ({ bean, scale = 1, showBorder = true
                 </div>
             </div>
             
-            <div className="text-[8px] font-bold tracking-[0.2em] text-coffee-400 mt-2">
-                NET WEIGHT 200g
+            <div className="mt-2">
+                <MetaBlock />
             </div>
         </div>
 
@@ -171,8 +225,7 @@ export const Label: React.FC<LabelProps> = ({ bean, scale = 1, showBorder = true
             {bean.showDivider && <div className="border-t border-coffee-100 w-full mb-4"></div>}
 
             <div className="space-y-2 px-1">
-                <MetricBar value={bean.acidity || 3} label="ACID" />
-                <MetricBar value={bean.bitterness || 3} label="BODY" />
+                <BalanceBar />
             </div>
             
             <div className="mt-4 text-center">
@@ -187,11 +240,13 @@ export const Label: React.FC<LabelProps> = ({ bean, scale = 1, showBorder = true
   };
 
   return (
-    <div 
-      style={containerStyle} 
-      className={`bg-white flex flex-col ${showBorder ? 'border border-gray-200 shadow-sm' : ''} transition-all`}
-    >
-        {renderContent()}
+    <div style={outerStyle}>
+      <div 
+        style={innerStyle} 
+        className={`bg-white flex flex-col ${showBorder ? 'border border-gray-200 shadow-sm' : ''} transition-all`}
+      >
+          {renderContent()}
+      </div>
     </div>
   );
 };

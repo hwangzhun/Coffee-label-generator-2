@@ -9,6 +9,10 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 const uid = () => Math.random().toString(36).substr(2, 9);
+const normalizeBean = (bean: CoffeeBean): CoffeeBean => ({
+  ...bean,
+  tasteBalance: typeof bean.tasteBalance === 'number' ? bean.tasteBalance : 0,
+});
 
 export const DesktopView: React.FC = () => {
   const [currentBean, setCurrentBean] = useState<CoffeeBean>(INITIAL_BEAN);
@@ -19,26 +23,28 @@ export const DesktopView: React.FC = () => {
   useEffect(() => {
     const saved = localStorage.getItem('beanTemplates');
     if (saved) {
-      setSavedTemplates(JSON.parse(saved));
+      const parsed: CoffeeBean[] = JSON.parse(saved);
+      setSavedTemplates(parsed.map(normalizeBean));
     }
   }, []);
 
   const handleSaveTemplate = () => {
     if (!currentBean.nameLight && !currentBean.nameBold) return alert("需要输入名称才能保存模版");
     
-    const existingIndex = savedTemplates.findIndex(t => t.id === currentBean.id);
+    const beanToSave = normalizeBean(currentBean);
+    const existingIndex = savedTemplates.findIndex(t => t.id === beanToSave.id);
     let updated;
     
     if (existingIndex >= 0) {
        updated = [...savedTemplates];
-       updated[existingIndex] = currentBean;
+       updated[existingIndex] = beanToSave;
     } else {
-       const newTemplate = { ...currentBean, id: uid() };
+       const newTemplate = { ...beanToSave, id: uid() };
        updated = [...savedTemplates, newTemplate];
        setCurrentBean(newTemplate);
     }
     
-    setSavedTemplates(updated);
+    setSavedTemplates(updated.map(normalizeBean));
     localStorage.setItem('beanTemplates', JSON.stringify(updated));
     alert("模版已保存!");
   };
@@ -54,10 +60,10 @@ export const DesktopView: React.FC = () => {
   };
 
   const handleSelectTemplate = (bean: CoffeeBean) => {
-    setCurrentBean({ ...bean });
+    setCurrentBean(normalizeBean({ ...bean }));
   };
 
-  const handleAddToPrint = (qty: number) => {
+  const handleAddToPrint = (qty: number, weight: number, productionDate: string) => {
     // Dynamic size check
     const size = currentBean.labelSize || '105x74';
     if (printQueue.length > 0) {
@@ -68,7 +74,8 @@ export const DesktopView: React.FC = () => {
             }
         }
     }
-    setPrintQueue([...printQueue, { id: uid(), bean: { ...currentBean }, quantity: qty }]);
+    const snapshot = normalizeBean({ ...currentBean });
+    setPrintQueue([...printQueue, { id: uid(), bean: snapshot, quantity: qty, weight, productionDate }]);
   };
 
   const handleRemoveFromQueue = (jobId: string) => {

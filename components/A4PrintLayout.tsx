@@ -16,10 +16,12 @@ export const A4PrintLayout: React.FC<A4PrintLayoutProps> = ({ queue, onRemoveIte
 
   // Flatten queue into individual label instances
   const labelsToRender = queue.flatMap(item => 
-    Array(item.quantity).fill(item.bean).map((bean, idx) => ({
+    Array(item.quantity).fill(null).map((_, idx) => ({
       uniqueId: `${item.id}-${idx}`,
       originalJobId: item.id,
-      bean
+      bean: item.bean,
+      weight: item.weight,
+      productionDate: item.productionDate
     }))
   );
 
@@ -92,7 +94,12 @@ export const A4PrintLayout: React.FC<A4PrintLayoutProps> = ({ queue, onRemoveIte
                 >
                     {pageItems.map((item, index) => (
                         <div key={index} className="relative group" style={{ width: gridConfig.itemW, height: gridConfig.itemH }}>
-                            <Label bean={item.bean} showBorder={false} />
+                            <Label 
+                                bean={item.bean} 
+                                showBorder={false} 
+                                weightInGrams={item.weight}
+                                productionDate={item.productionDate}
+                            />
                             
                             {/* Remove Button Overlay */}
                             <button 

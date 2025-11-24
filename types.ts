@@ -19,9 +19,8 @@ export interface CoffeeBean {
   flavorEN: string;
   
   // 105x74 Specifics
-  acidity: number; // 1-5
-  bitterness: number; // 1-5
   category: BeanCategory;
+  tasteBalance: number; // -4 (更酸) -> 4 (更苦)
 
   // Visuals
   labelSize: LabelSize;
@@ -39,9 +38,8 @@ export const INITIAL_BEAN: CoffeeBean = {
   altitude: '',
   flavorCN: '',
   flavorEN: '',
-  acidity: 3,
-  bitterness: 3,
   category: 'filter',
+  tasteBalance: 0,
   labelSize: '105x74',
   showDivider: true
 };
@@ -50,4 +48,6 @@ export interface PrintJobItem {
   id: string;
   bean: CoffeeBean;
   quantity: number;
+  weight: number;
+  productionDate: string;
 }

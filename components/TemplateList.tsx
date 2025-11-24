@@ -24,11 +24,19 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, onSelect,
                 暂无保存的模版
             </div>
         ) : (
-            templates.map((t) => (
+            templates.map((t) => {
+                const displayName = [t.nameLight, t.nameBold].filter(Boolean).join(' · ') || "未命名";
+                const categoryLabel = t.category === 'espresso' ? '意式' : '手冲';
+                const sizeLabel = t.labelSize === '60x85' ? '竖版' : '横版';
+                return (
                 <div key={t.id} className="group relative bg-gray-50 hover:bg-coffee-50 rounded-lg p-3 transition-colors border border-transparent hover:border-coffee-200">
-                    <div className="cursor-pointer" onClick={() => onSelect(t)}>
-                        <h3 className="font-bold text-coffee-900 text-sm truncate">{t.nameBold || t.nameLight || "未命名"}</h3>
-                        <p className="text-xs text-coffee-600 truncate">{t.origin} • {t.roastLevel}</p>
+                    <div className="cursor-pointer flex flex-col gap-1" onClick={() => onSelect(t)}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-coffee-900 text-sm truncate flex-1">{displayName}</h3>
+                            <span className="text-[10px] font-semibold text-coffee-600 border border-coffee-200 rounded-full px-2 py-0.5 shrink-0">{categoryLabel}</span>
+                            <span className="text-[10px] font-semibold text-coffee-500 border border-dashed border-coffee-200 rounded-full px-2 py-0.5 shrink-0">{sizeLabel}</span>
+                        </div>
+                        <p className="text-xs text-coffee-600 truncate">{t.origin || '未填写产地'} • {t.roastLevel}</p>
                     </div>
                     <button 
                         onClick={(e) => {
@@ -47,7 +55,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, onSelect,
                         <ArrowRight size={14} />
                     </div>
                 </div>
-            ))
+            )})
         )}
       </div>
     </div>

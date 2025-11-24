@@ -6,11 +6,15 @@ interface BeanFormProps {
   bean: CoffeeBean;
   onChange: (bean: CoffeeBean) => void;
   onSaveTemplate: () => void;
-  onAddToPrint: (quantity: number) => void;
+  onAddToPrint: (quantity: number, weight: number, productionDate: string) => void;
 }
+
+const todayString = () => new Date().toISOString().slice(0, 10);
 
 export const BeanForm: React.FC<BeanFormProps> = ({ bean, onChange, onSaveTemplate, onAddToPrint }) => {
   const [printQty, setPrintQty] = useState(1);
+  const [printWeight, setPrintWeight] = useState(200);
+  const [productionDate, setProductionDate] = useState(todayString());
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -160,7 +164,7 @@ export const BeanForm: React.FC<BeanFormProps> = ({ bean, onChange, onSaveTempla
         {/* 105x74 Specifics */}
         {bean.labelSize === '105x74' && (
             <div className="bg-coffee-50 p-3 rounded-lg border border-coffee-100 space-y-3">
-                 <div className="flex gap-4">
+                <div className="flex gap-4">
                     <div className="flex-1">
                         <label className="block text-xs font-bold text-coffee-800 uppercase tracking-wide mb-1">分类</label>
                         <div className="flex gap-1">
@@ -178,17 +182,30 @@ export const BeanForm: React.FC<BeanFormProps> = ({ bean, onChange, onSaveTempla
                             </button>
                         </div>
                     </div>
-                 </div>
-                 <div className="flex gap-4">
-                     <div className="flex-1">
-                        <label className="block text-xs font-bold text-coffee-800 mb-1">酸度 (Acidity): {bean.acidity || 3}</label>
-                        <input type="range" min="1" max="5" value={bean.acidity || 3} onChange={(e) => onChange({...bean, acidity: parseInt(e.target.value)})} className="w-full accent-coffee-600" />
-                     </div>
-                     <div className="flex-1">
-                        <label className="block text-xs font-bold text-coffee-800 mb-1">苦/醇度 (Body): {bean.bitterness || 3}</label>
-                        <input type="range" min="1" max="5" value={bean.bitterness || 3} onChange={(e) => onChange({...bean, bitterness: parseInt(e.target.value)})} className="w-full accent-coffee-600" />
-                     </div>
-                 </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                    <label className="block text-xs font-bold text-coffee-800 uppercase tracking-wide">酸苦平衡</label>
+                    <div className="flex items-center gap-3">
+                        <span className="text-[10px] text-coffee-600 font-semibold">更酸</span>
+                        <input 
+                            type="range" 
+                            min="-4" 
+                            max="4" 
+                            step="1"
+                            value={bean.tasteBalance ?? 0}
+                            onChange={(e) => onChange({...bean, tasteBalance: parseInt(e.target.value)})}
+                            className="flex-1 accent-coffee-600"
+                        />
+                        <span className="text-[10px] text-coffee-600 font-semibold">更苦</span>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-coffee-400 uppercase tracking-wide px-1">
+                        <span>-4</span>
+                        <span>-2</span>
+                        <span>0</span>
+                        <span>+2</span>
+                        <span>+4</span>
+                    </div>
+                </div>
             </div>
         )}
 
@@ -216,21 +233,43 @@ export const BeanForm: React.FC<BeanFormProps> = ({ bean, onChange, onSaveTempla
       </div>
 
       <div className="mt-6 pt-6 border-t border-gray-100">
-        <div className="flex items-end gap-2">
-            <div className="flex-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">打印数量</label>
+        <div className="space-y-4">
+            <div className="flex gap-3">
+                <div className="flex-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">打印数量</label>
+                    <input 
+                        type="number" 
+                        min="1" 
+                        max="99"
+                        value={printQty}
+                        onChange={(e) => setPrintQty(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full border border-gray-200 rounded p-2 text-center"
+                    />
+                </div>
+                <div className="flex-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">重量 (g)</label>
+                    <input 
+                        type="number"
+                        min="1"
+                        max="9999"
+                        value={printWeight}
+                        onChange={(e) => setPrintWeight(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full border border-gray-200 rounded p-2 text-center"
+                    />
+                </div>
+            </div>
+            <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">生产日期</label>
                 <input 
-                    type="number" 
-                    min="1" 
-                    max="99"
-                    value={printQty}
-                    onChange={(e) => setPrintQty(parseInt(e.target.value) || 1)}
-                    className="w-full border border-gray-200 rounded p-2 text-center"
+                    type="date"
+                    value={productionDate}
+                    onChange={(e) => setProductionDate(e.target.value)}
+                    className="w-full border border-gray-200 rounded p-2"
                 />
             </div>
             <button 
-                onClick={() => onAddToPrint(printQty)}
-                className="flex-[2] bg-coffee-600 hover:bg-coffee-700 text-white font-medium py-2 px-4 rounded transition-all shadow-md active:scale-95"
+                onClick={() => onAddToPrint(printQty, printWeight, productionDate || todayString())}
+                className="w-full bg-coffee-600 hover:bg-coffee-700 text-white font-medium py-2 px-4 rounded transition-all shadow-md active:scale-95"
             >
                 加入打印队列
             </button>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { CoffeeBean, PrintJobItem } from '../types';
 import { A4PrintLayout } from './A4PrintLayout';
 import { Label } from './Label';
@@ -7,6 +7,23 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 const uid = () => Math.random().toString(36).substr(2, 9);
+const todayString = () => {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+const formatTemplateName = (bean: CoffeeBean) => {
+  const parts = [bean.nameLight, bean.nameBold].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : '未命名';
+};
+const formatDateForDisplay = (value?: string) => {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+};
 
 export const MobileView: React.FC = () => {
   const [savedTemplates, setSavedTemplates] = useState<CoffeeBean[]>([]);
@@ -14,7 +31,10 @@ export const MobileView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'select' | 'queue'>('select');
   const [selectedForAdd, setSelectedForAdd] = useState<CoffeeBean | null>(null);
   const [addQty, setAddQty] = useState(1);
+  const [addWeight, setAddWeight] = useState(200);
+  const [addProductionDate, setAddProductionDate] = useState(todayString());
   const [isExporting, setIsExporting] = useState(false);
+  const [showExportConfirm, setShowExportConfirm] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('beanTemplates');
@@ -23,8 +43,39 @@ export const MobileView: React.FC = () => {
     }
   }, []);
 
+  const templateGroups = useMemo(() => {
+    const filterTemplates = savedTemplates.filter(t => (t.category || 'filter') !== 'espresso');
+    const espressoTemplates = savedTemplates.filter(t => t.category === 'espresso');
+    return [
+      { key: 'filter', label: '手冲', items: filterTemplates },
+      { key: 'espresso', label: '意式', items: espressoTemplates }
+    ];
+  }, [savedTemplates]);
+
+  const openAddModal = (bean: CoffeeBean) => {
+    setSelectedForAdd(bean);
+    setAddQty(1);
+    setAddWeight(200);
+    setAddProductionDate(todayString());
+  };
+
+  const closeAddModal = () => {
+    setSelectedForAdd(null);
+    setAddQty(1);
+    setAddWeight(200);
+    setAddProductionDate(todayString());
+  };
+
   const handleAddToQueue = () => {
     if (!selectedForAdd) return;
+    if (addWeight <= 0) {
+        alert('请填写有效的重量（克）');
+        return;
+    }
+    if (!addProductionDate) {
+        alert('请选择生产日期');
+        return;
+    }
     
     // Check size mismatch
     const size = selectedForAdd.labelSize || '105x74';
@@ -37,18 +88,21 @@ export const MobileView: React.FC = () => {
          }
     }
 
-    setPrintQueue([...printQueue, { 
-        id: uid(), 
-        bean: selectedForAdd, 
-        quantity: addQty 
-    }]);
+    setPrintQueue([
+        ...printQueue, 
+        { 
+            id: uid(), 
+            bean: selectedForAdd, 
+            quantity: addQty,
+            weight: addWeight,
+            productionDate: addProductionDate
+        }
+    ]);
     
-    setSelectedForAdd(null);
-    setAddQty(1);
-    setActiveTab('queue');
+    closeAddModal();
   };
 
-  const handleDownloadPDF = async () => {
+  const generatePDF = async () => {
     const pages = document.querySelectorAll('.print-page');
     if (pages.length === 0) return;
 
@@ -79,7 +133,18 @@ export const MobileView: React.FC = () => {
     }
   };
 
+  const handleExportClick = () => {
+    if (printQueue.length === 0) return;
+    setShowExportConfirm(true);
+  };
+
+  const handleConfirmExport = async () => {
+    setShowExportConfirm(false);
+    await generatePDF();
+  };
+
   const totalLabels = printQueue.reduce((acc, i) => acc + i.quantity, 0);
+  const totalWeight = printQueue.reduce((acc, i) => acc + i.quantity * (i.weight || 0), 0);
 
   return (
     <div className="flex flex-col h-screen w-full bg-gray-50 text-slate-800 font-sans">
@@ -119,30 +184,50 @@ export const MobileView: React.FC = () => {
         </div>
 
         {activeTab === 'select' && (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-6">
                 {savedTemplates.length === 0 ? (
                     <div className="text-center text-gray-400 mt-10">
                         暂无模版。<br/>请先在电脑端 (/edit) 创建模版。
                     </div>
                 ) : (
-                    savedTemplates.map(t => (
-                        <div key={t.id} 
-                             onClick={() => setSelectedForAdd(t)}
-                             className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 active:scale-95 transition-transform"
-                        >
-                            <div className="pointer-events-none mb-2 rounded overflow-hidden border border-gray-100 bg-gray-50 flex justify-center py-2">
-                                <Label bean={t} scale={0.6} showBorder={false} />
-                            </div>
-                            <div className="flex justify-between items-center px-1 border-t pt-2">
-                                <div>
-                                    <h3 className="font-bold text-coffee-900">{t.nameBold || "未命名"}</h3>
-                                    <p className="text-[10px] text-gray-400">
-                                        {t.labelSize === '60x85' ? '竖版 (60x85)' : '横版 (105x74)'}
-                                    </p>
+                    templateGroups.map(group => (
+                        group.items.length > 0 && (
+                            <section key={group.key}>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-sm font-semibold text-coffee-800">{group.label}</h3>
+                                    <span className="text-[11px] text-gray-400">{group.items.length} 个模版</span>
                                 </div>
-                                <Plus className="text-coffee-500" size={20} />
-                            </div>
-                        </div>
+                                <div className="space-y-2">
+                                    {group.items.map(t => {
+                                        const subtitle = `${t.origin || '未填写产地'} • ${t.roastLevel || ''}`.trim();
+                                        const categoryLabel = t.category === 'espresso' ? '意式' : '手冲';
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={t.id}
+                                                onClick={() => openAddModal(t)}
+                                                className="w-full bg-white p-3 rounded-xl shadow-sm border border-gray-100 active:scale-95 transition-transform flex items-center justify-between gap-4"
+                                            >
+                                                <div className="flex-1 text-left">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-bold text-[14px] text-coffee-900 truncate">
+                                                            {formatTemplateName(t)}
+                                                        </p>
+                                                        <span className="text-[10px] font-semibold text-coffee-600 border border-coffee-200 rounded-full px-2 py-0.5 shrink-0">
+                                                            {categoryLabel}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[11px] text-gray-500 mt-1 truncate">
+                                                        {subtitle}
+                                                    </p>
+                                                </div>
+                                                <Plus className="text-coffee-500 shrink-0" size={18} />
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        )
                     ))
                 )}
             </div>
@@ -155,42 +240,67 @@ export const MobileView: React.FC = () => {
                         队列为空。去选择一些标签吧！
                     </div>
                 ) : (
-                    printQueue.map(item => (
-                        <div key={item.id} className="bg-white p-4 rounded-lg shadow-sm flex justify-between items-center">
-                            <div>
-                                <h4 className="font-bold text-coffee-900">{item.bean.nameBold}</h4>
-                                <p className="text-xs text-gray-500">数量: {item.quantity} | 尺寸: {item.bean.labelSize || '105x74'}</p>
+                    printQueue.map(item => {
+                        const aspectRatio = item.bean.labelSize === '60x85' ? '60 / 85' : '105 / 74.25';
+                        const previewScale = item.bean.labelSize === '60x85' ? 0.35 : 0.22;
+                        return (
+                            <div key={item.id} className="bg-white p-4 rounded-lg shadow-sm flex items-center gap-4">
+                                <div 
+                                    className="w-24 rounded-md border border-gray-100 bg-gray-50 flex items-center justify-center overflow-hidden shrink-0 relative"
+                                    style={{ aspectRatio }}
+                                >
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <Label bean={item.bean} scale={previewScale} showBorder={false} />
+                                    </div>
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="font-bold text-coffee-900">{formatTemplateName(item.bean)}</h4>
+                                    <p className="text-[11px] text-gray-500 mt-1">
+                                        尺寸 {item.bean.labelSize || '105x74'} ・ 数量 {item.quantity} ・ 重量 {item.weight}g
+                                    </p>
+                                    <p className="text-[11px] text-gray-400 mt-0.5">生产 {formatDateForDisplay(item.productionDate)}</p>
+                                </div>
+                                <button 
+                                    onClick={() => setPrintQueue(printQueue.filter(i => i.id !== item.id))}
+                                    className="text-red-400 p-2"
+                                >
+                                    <X size={20} />
+                                </button>
                             </div>
-                            <button 
-                                onClick={() => setPrintQueue(printQueue.filter(i => i.id !== item.id))}
-                                className="text-red-400 p-2"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
         )}
       </div>
 
-      {/* Floating Action Button for Export */}
-      {printQueue.length > 0 && (
-          <div className="fixed bottom-6 left-0 right-0 px-4 flex justify-center z-40">
+      {/* Bottom Action Button */}
+      <div className="fixed bottom-6 left-0 right-0 px-4 flex justify-center z-40">
+          {activeTab === 'select' ? (
               <button 
-                onClick={handleDownloadPDF}
-                disabled={isExporting}
-                className="bg-coffee-800 text-white w-full max-w-md py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 font-bold active:scale-95 transition-all disabled:opacity-70"
+                onClick={() => setActiveTab('queue')}
+                disabled={printQueue.length === 0}
+                className="bg-white text-coffee-700 border border-coffee-200 w-full max-w-md py-3 rounded-xl shadow-sm font-semibold active:scale-95 transition-all disabled:text-gray-400 disabled:border-gray-200 disabled:bg-gray-100"
               >
-                  {isExporting ? '生成 PDF 中...' : (
-                      <>
-                        <Download size={20} />
-                        导出 PDF ({totalLabels}个)
-                      </>
-                  )}
+                  {printQueue.length === 0 ? '请选择模版后再下一步' : '下一步 > 队列'}
               </button>
-          </div>
-      )}
+          ) : (
+              printQueue.length > 0 && (
+                  <button 
+                    onClick={handleExportClick}
+                    disabled={isExporting}
+                    className="bg-coffee-800 text-white w-full max-w-md py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 font-bold active:scale-95 transition-all disabled:opacity-70"
+                  >
+                      {isExporting ? '生成 PDF 中...' : (
+                          <>
+                            <Download size={20} />
+                            导出 PDF ({totalLabels}个)
+                          </>
+                      )}
+                  </button>
+              )
+          )}
+      </div>
 
       {/* Add Quantity Modal */}
       {selectedForAdd && (
@@ -206,9 +316,11 @@ export const MobileView: React.FC = () => {
                       </div>
                   )}
 
-                  <div className="mb-2 text-center text-coffee-700 font-medium">{selectedForAdd.nameBold}</div>
+                  <div className="mb-3 text-center text-coffee-700 font-medium">
+                      {formatTemplateName(selectedForAdd)}
+                  </div>
                   
-                  <div className="flex items-center justify-center gap-4 my-6">
+                  <div className="flex items-center justify-center gap-4 my-4">
                       <button 
                         onClick={() => setAddQty(Math.max(1, addQty - 1))}
                         className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl font-bold text-gray-600"
@@ -220,9 +332,31 @@ export const MobileView: React.FC = () => {
                       >+</button>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="space-y-3 text-sm">
+                      <div>
+                          <label className="block text-[11px] font-semibold text-gray-500 mb-1">重量 (克)</label>
+                          <input 
+                            type="number"
+                            min={1}
+                            value={addWeight}
+                            onChange={(e) => setAddWeight(Math.max(1, parseInt(e.target.value || '1', 10)))}
+                            className="w-full border border-gray-200 rounded-lg p-2 text-center focus:ring-2 focus:ring-coffee-200 outline-none"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-[11px] font-semibold text-gray-500 mb-1">生产日期</label>
+                          <input 
+                            type="date"
+                            value={addProductionDate}
+                            onChange={(e) => setAddProductionDate(e.target.value)}
+                            className="w-full border border-gray-200 rounded-lg p-2 focus:ring-2 focus:ring-coffee-200 outline-none"
+                          />
+                      </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-6">
                       <button 
-                        onClick={() => setSelectedForAdd(null)}
+                        onClick={closeAddModal}
                         className="flex-1 py-3 text-gray-500 font-medium"
                       >
                           取消
@@ -232,6 +366,46 @@ export const MobileView: React.FC = () => {
                         className="flex-1 bg-coffee-600 text-white py-3 rounded-lg font-bold shadow-md"
                       >
                           确认
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Export Summary Modal */}
+      {showExportConfirm && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+                  <h3 className="text-lg font-bold text-center text-coffee-900">打印统计</h3>
+                  <p className="text-xs text-gray-500 text-center mt-1">
+                      共 {totalLabels} 张 ・ 预计总重量 {totalWeight || '-'} g
+                  </p>
+                  <div className="mt-4 max-h-60 overflow-y-auto space-y-3 pr-1">
+                      {printQueue.map(item => (
+                          <div key={item.id} className="border border-gray-100 rounded-lg p-3">
+                              <div className="font-semibold text-sm text-coffee-900">{formatTemplateName(item.bean)}</div>
+                              <div className="text-[11px] text-gray-500 mt-1">
+                                  数量 {item.quantity} ・ 重量 {item.weight}g
+                              </div>
+                              <div className="text-[11px] text-gray-400">
+                                  生产 {formatDateForDisplay(item.productionDate)}
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+                  <div className="flex gap-2 mt-6">
+                      <button 
+                        onClick={() => setShowExportConfirm(false)}
+                        className="flex-1 py-3 text-gray-500 font-medium"
+                      >
+                          取消
+                      </button>
+                      <button 
+                        onClick={handleConfirmExport}
+                        className="flex-1 bg-coffee-700 text-white py-3 rounded-xl font-bold shadow-md disabled:opacity-60"
+                        disabled={isExporting}
+                      >
+                          {isExporting ? '生成中...' : '确认生成 PDF'}
                       </button>
                   </div>
               </div>
