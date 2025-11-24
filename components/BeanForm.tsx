@@ -40,7 +40,7 @@ export const BeanForm: React.FC<BeanFormProps> = ({ bean, onChange, onSaveTempla
   return (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-full flex flex-col overflow-y-auto no-scrollbar">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-serif font-bold text-coffee-900">标签详情</h2>
+        <h2 className="text-xl font-serif font-bold text-coffee-900">编辑标签</h2>
         <button 
           onClick={onSaveTemplate}
           className="flex items-center gap-2 text-sm text-coffee-600 hover:text-coffee-800 transition-colors"

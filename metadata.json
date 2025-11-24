@@ -1,5 +1,5 @@
 {
   "name": "BeanLabel Pro",
-  "description": "A professional coffee bean label generator. Design, manage templates, and export A4 print-ready PDFs with AI-powered flavor note generation.",
+  "description": "专业的咖啡豆标签生成工具。支持桌面端编辑与移动端打印，AI 辅助生成风味描述。",
   "requestFramePermissions": []
 }

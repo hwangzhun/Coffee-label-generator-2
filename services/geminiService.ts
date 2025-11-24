@@ -22,8 +22,8 @@ export const generateBeanDetails = async (name: string, origin: string, processT
       处理法: ${processType}
 
       请生成:
-      1. flavorNotes: 3-5个诱人的风味关键词（用逗号分隔，中文）。
-      2. description: 一段简短的、有营销吸引力的描述（30字以内，中文）。
+      1. flavorNotes: 3-5个诱人的风味关键词（用中文，逗号分隔）。
+      2. description: 一段简短的、有营销吸引力的描述（中文，30字以内）。
       
       请以 JSON 格式返回。
     `;
