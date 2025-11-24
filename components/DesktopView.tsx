@@ -1,26 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CoffeeBean, INITIAL_BEAN, PrintJobItem } from '../types';
 import { BeanForm } from './BeanForm';
 import { TemplateList } from './TemplateList';
 import { Label } from './Label';
 import { A4PrintLayout } from './A4PrintLayout';
-import { Printer, Download, Plus, Save } from 'lucide-react';
+import { Printer, Download, Plus } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// Helper for ID generation
 const uid = () => Math.random().toString(36).substr(2, 9);
 
-interface DesktopViewProps {}
-
-export const DesktopView: React.FC<DesktopViewProps> = () => {
+export const DesktopView: React.FC = () => {
   const [currentBean, setCurrentBean] = useState<CoffeeBean>(INITIAL_BEAN);
   const [savedTemplates, setSavedTemplates] = useState<CoffeeBean[]>([]);
   const [printQueue, setPrintQueue] = useState<PrintJobItem[]>([]);
-  const printRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
 
-  // Load templates on mount
   useEffect(() => {
     const saved = localStorage.getItem('beanTemplates');
     if (saved) {
@@ -28,11 +23,9 @@ export const DesktopView: React.FC<DesktopViewProps> = () => {
     }
   }, []);
 
-  // Save templates
   const handleSaveTemplate = () => {
-    if (!currentBean.name) return alert("需要输入名称才能保存模版");
+    if (!currentBean.nameLight && !currentBean.nameBold) return alert("需要输入名称才能保存模版");
     
-    // Check if updating existing or new
     const existingIndex = savedTemplates.findIndex(t => t.id === currentBean.id);
     let updated;
     
@@ -42,7 +35,7 @@ export const DesktopView: React.FC<DesktopViewProps> = () => {
     } else {
        const newTemplate = { ...currentBean, id: uid() };
        updated = [...savedTemplates, newTemplate];
-       setCurrentBean(newTemplate); // Switch to editing mode for the new ID
+       setCurrentBean(newTemplate);
     }
     
     setSavedTemplates(updated);
@@ -65,10 +58,15 @@ export const DesktopView: React.FC<DesktopViewProps> = () => {
   };
 
   const handleAddToPrint = (qty: number) => {
-    const currentCount = printQueue.reduce((acc, item) => acc + item.quantity, 0);
-    if (currentCount + qty > 8) {
-      alert("A4纸一页最多 8 个标签。请减少数量或清空队列。");
-      return;
+    // Dynamic size check
+    const size = currentBean.labelSize || '105x74';
+    if (printQueue.length > 0) {
+        const queueSize = printQueue[0].bean.labelSize || '105x74';
+        if (queueSize !== size) {
+            if (!confirm(`当前队列是 ${queueSize} 尺寸，您正在添加 ${size} 尺寸。这可能导致排版错误。是否继续？`)) {
+                return;
+            }
+        }
     }
     setPrintQueue([...printQueue, { id: uid(), bean: { ...currentBean }, quantity: qty }]);
   };
@@ -78,22 +76,29 @@ export const DesktopView: React.FC<DesktopViewProps> = () => {
   };
 
   const handleDownloadPDF = async () => {
-    if (!printRef.current) return;
+    const pages = document.querySelectorAll('.print-page');
+    if (pages.length === 0) return;
+    
     setIsExporting(true);
 
     try {
-      const canvas = await html2canvas(printRef.current, {
-        scale: 3, // High resolution for print
-        useCORS: true,
-      });
-
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      
       const pdfWidth = 210;
       const pdfHeight = 297;
 
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      for (let i = 0; i < pages.length; i++) {
+          const pageElement = pages[i] as HTMLElement;
+          const canvas = await html2canvas(pageElement, {
+            scale: 2, 
+            useCORS: true,
+            logging: false
+          });
+          const imgData = canvas.toDataURL('image/png');
+          
+          if (i > 0) pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      }
+      
       pdf.save('coffee-labels.pdf');
     } catch (err) {
       console.error(err);
@@ -104,49 +109,13 @@ export const DesktopView: React.FC<DesktopViewProps> = () => {
   };
 
   const handleClear = () => {
-      setCurrentBean(INITIAL_BEAN);
-  };
-
-  const handleExportData = () => {
-      const dataStr = JSON.stringify(savedTemplates, null, 2);
-      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-      const exportFileDefaultName = 'bean-templates.json';
-      const linkElement = document.createElement('a');
-      linkElement.setAttribute('href', dataUri);
-      linkElement.setAttribute('download', exportFileDefaultName);
-      linkElement.click();
-  };
-
-  const handleImportData = () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'application/json';
-      input.onchange = (e: any) => {
-          const file = e.target.files[0];
-          const reader = new FileReader();
-          reader.onload = (event) => {
-              try {
-                  const json = JSON.parse(event.target?.result as string);
-                  if (Array.isArray(json)) {
-                      setSavedTemplates(json);
-                      localStorage.setItem('beanTemplates', JSON.stringify(json));
-                      alert("导入成功！");
-                  } else {
-                      alert("JSON 格式错误");
-                  }
-              } catch (err) {
-                  alert("无法解析 JSON 文件");
-              }
-          };
-          reader.readAsText(file);
-      };
-      input.click();
+      setCurrentBean({ ...INITIAL_BEAN, id: uid() });
   };
 
   return (
     <div className="flex h-screen w-full bg-gray-50 overflow-hidden text-slate-800 font-sans">
       
-      {/* Sidebar: Templates */}
+      {/* Sidebar */}
       <div className="w-64 border-r border-gray-200 bg-white p-4 hidden md:flex flex-col">
         <div className="mb-6">
             <h1 className="font-serif font-black text-2xl text-coffee-800 tracking-tight">BeanLabel<span className="text-coffee-500">Pro</span></h1>
@@ -165,28 +134,20 @@ export const DesktopView: React.FC<DesktopViewProps> = () => {
                 onDelete={handleDeleteTemplate} 
             />
         </div>
-        <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2 justify-center text-xs text-gray-500">
-             <button onClick={handleExportData} className="hover:underline">导出数据</button>
-             <span>|</span>
-             <button onClick={handleImportData} className="hover:underline">导入数据</button>
-        </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Content */}
       <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden">
         
-        {/* Editor Column */}
+        {/* Editor */}
         <div className="w-full md:w-[400px] lg:w-[450px] p-4 bg-gray-50 border-r border-gray-200 flex flex-col gap-4 overflow-hidden">
-            
-            {/* Live Single Preview */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center justify-center min-h-[300px]">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3 self-start w-full border-b pb-2">实时预览</h3>
-                <div className="transform scale-[0.8] origin-center shadow-lg">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center justify-center min-h-[320px] relative">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide absolute top-4 left-4">实时预览</h3>
+                <div className={`transform ${currentBean.labelSize === '60x85' ? 'scale-[1]' : 'scale-[0.8]'} origin-center shadow-xl transition-all duration-300`}>
                     <Label bean={currentBean} />
                 </div>
             </div>
 
-            {/* Form */}
             <div className="flex-1 overflow-hidden">
                 <BeanForm 
                     bean={currentBean} 
@@ -197,12 +158,12 @@ export const DesktopView: React.FC<DesktopViewProps> = () => {
             </div>
         </div>
 
-        {/* Print Layout / Queue Column */}
+        {/* Layout */}
         <div className="flex-1 bg-gray-100 flex flex-col relative">
-            <header className="bg-white border-b border-gray-200 p-4 flex justify-between items-center shadow-sm z-10">
+            <header className="bg-white border-b border-gray-200 p-4 flex justify-between items-center shadow-sm z-10 shrink-0">
                 <div className="flex items-center gap-2">
                     <Printer className="text-coffee-600" />
-                    <h2 className="font-bold text-gray-800">打印预览 (A4 排版)</h2>
+                    <h2 className="font-bold text-gray-800">打印队列 (自动分页)</h2>
                 </div>
                 <div className="flex gap-2">
                     <button 
@@ -216,7 +177,7 @@ export const DesktopView: React.FC<DesktopViewProps> = () => {
                         disabled={printQueue.length === 0 || isExporting}
                         className="flex items-center gap-2 bg-coffee-800 hover:bg-coffee-900 text-white px-6 py-2 rounded-lg font-medium shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {isExporting ? '生成中...' : (
+                        {isExporting ? '处理中...' : (
                             <>
                                 <Download size={18} />
                                 导出 PDF
@@ -230,7 +191,6 @@ export const DesktopView: React.FC<DesktopViewProps> = () => {
                 <A4PrintLayout 
                     queue={printQueue} 
                     onRemoveItem={handleRemoveFromQueue} 
-                    printRef={printRef}
                 />
             </div>
         </div>

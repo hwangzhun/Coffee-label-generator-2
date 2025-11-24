@@ -27,7 +27,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, onSelect,
             templates.map((t) => (
                 <div key={t.id} className="group relative bg-gray-50 hover:bg-coffee-50 rounded-lg p-3 transition-colors border border-transparent hover:border-coffee-200">
                     <div className="cursor-pointer" onClick={() => onSelect(t)}>
-                        <h3 className="font-bold text-coffee-900 text-sm truncate">{t.name || "未命名"}</h3>
+                        <h3 className="font-bold text-coffee-900 text-sm truncate">{t.nameBold || t.nameLight || "未命名"}</h3>
                         <p className="text-xs text-coffee-600 truncate">{t.origin} • {t.roastLevel}</p>
                     </div>
                     <button 

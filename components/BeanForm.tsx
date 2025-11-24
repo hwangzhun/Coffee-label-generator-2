@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { CoffeeBean } from '../types';
-import { Wand2, Loader2, Save } from 'lucide-react';
-import { generateBeanDetails } from '../services/geminiService';
+import { CoffeeBean, LabelSize } from '../types';
+import { Save, LayoutTemplate, Coffee, Droplets } from 'lucide-react';
 
 interface BeanFormProps {
   bean: CoffeeBean;
@@ -11,30 +10,11 @@ interface BeanFormProps {
 }
 
 export const BeanForm: React.FC<BeanFormProps> = ({ bean, onChange, onSaveTemplate, onAddToPrint }) => {
-  const [isGenerating, setIsGenerating] = useState(false);
   const [printQty, setPrintQty] = useState(1);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     onChange({ ...bean, [name]: value });
-  };
-
-  const handleGenerateAI = async () => {
-    if (!bean.name && !bean.origin) {
-      alert("请至少输入名称和产地。");
-      return;
-    }
-    setIsGenerating(true);
-    const result = await generateBeanDetails(bean.name, bean.origin, bean.process);
-    setIsGenerating(false);
-    
-    if (result) {
-      onChange({
-        ...bean,
-        flavorNotes: result.flavorNotes,
-        description: result.description
-      });
-    }
   };
 
   return (
@@ -49,29 +29,100 @@ export const BeanForm: React.FC<BeanFormProps> = ({ bean, onChange, onSaveTempla
         </button>
       </div>
 
-      <div className="space-y-4 flex-1">
+      <div className="space-y-5 flex-1">
         
-        {/* Basic Info */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Settings Section */}
+        <div className="bg-gray-50 p-3 rounded-lg space-y-3 border border-gray-100">
+             <div className="flex items-center gap-2 mb-1">
+                <LayoutTemplate size={14} className="text-coffee-600"/>
+                <label className="text-xs font-bold text-coffee-800 uppercase tracking-wide">标签规格</label>
+             </div>
+             <div className="grid grid-cols-2 gap-2">
+                <button 
+                    onClick={() => onChange({...bean, labelSize: '105x74'})}
+                    className={`text-xs py-2 px-2 border rounded transition-all ${bean.labelSize === '105x74' || !bean.labelSize ? 'bg-white border-coffee-500 text-coffee-800 font-bold shadow-sm' : 'border-gray-200 text-gray-500 hover:bg-white'}`}
+                >
+                    105x74 (横版/丰富)
+                </button>
+                <button 
+                     onClick={() => onChange({...bean, labelSize: '60x85'})}
+                     className={`text-xs py-2 px-2 border rounded transition-all ${bean.labelSize === '60x85' ? 'bg-white border-coffee-500 text-coffee-800 font-bold shadow-sm' : 'border-gray-200 text-gray-500 hover:bg-white'}`}
+                >
+                    60x85 (竖版/简约)
+                </button>
+             </div>
+
+             <div className="flex items-center justify-between pt-1">
+                <label className="text-xs font-bold text-coffee-800 uppercase tracking-wide">显示分割线</label>
+                <input 
+                    type="checkbox" 
+                    checked={bean.showDivider} 
+                    onChange={(e) => onChange({...bean, showDivider: e.target.checked})}
+                    className="accent-coffee-600 w-4 h-4"
+                />
+             </div>
+        </div>
+
+        {/* Name Info */}
+        <div className="space-y-3 pb-2 border-b border-gray-100">
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">前缀/庄园 (细体)</label>
+                    <input 
+                        type="text" 
+                        name="nameLight" 
+                        value={bean.nameLight} 
+                        onChange={handleChange} 
+                        placeholder="例如: 天堂庄园"
+                        className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none font-light"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">名称/豆种 (粗体)</label>
+                    <input 
+                        type="text" 
+                        name="nameBold" 
+                        value={bean.nameBold} 
+                        onChange={handleChange} 
+                        placeholder="例如: 瑰夏"
+                        className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none font-bold"
+                    />
+                </div>
+            </div>
             <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">名称 (Name)</label>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">国家 (用于显示国旗)</label>
                 <input 
                     type="text" 
-                    name="name" 
-                    value={bean.name} 
+                    name="country" 
+                    value={bean.country} 
                     onChange={handleChange} 
-                    placeholder="例如: 埃塞俄比亚 耶加雪菲"
+                    placeholder="例如: 哥伦比亚"
                     className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none"
                 />
             </div>
+        </div>
+
+        {/* Basic Info */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">产地 (Origin)</label>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">产地详情 (Origin)</label>
                 <input 
                     type="text" 
                     name="origin" 
                     value={bean.origin} 
                     onChange={handleChange}
-                    placeholder="例如: 盖德奥产区"
+                    placeholder="例如: 考卡省"
+                    className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none"
+                />
+            </div>
+            <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">处理法 (Process)</label>
+                <input 
+                    type="text" 
+                    name="process" 
+                    value={bean.process} 
+                    onChange={handleChange}
+                    placeholder="例如: 双重厌氧水洗"
                     className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none"
                 />
             </div>
@@ -79,77 +130,87 @@ export const BeanForm: React.FC<BeanFormProps> = ({ bean, onChange, onSaveTempla
 
         <div className="grid grid-cols-2 gap-4">
             <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">处理法 (Process)</label>
-                <input 
-                    type="text" 
-                    name="process" 
-                    value={bean.process} 
-                    onChange={handleChange}
-                    placeholder="例如: 日晒处理"
-                    className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none"
-                />
-            </div>
-            <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">海拔 (Altitude)</label>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">海拔 (Altitude)</label>
                 <input 
                     type="text" 
                     name="altitude" 
                     value={bean.altitude} 
                     onChange={handleChange}
-                    placeholder="例如: 1800m"
+                    placeholder="例如: 1960m"
                     className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none"
                 />
             </div>
-        </div>
-
-        <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">烘焙度 (Roast Level)</label>
-            <select 
-                name="roastLevel" 
-                value={bean.roastLevel} 
-                onChange={handleChange}
-                className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none"
-            >
-                <option value="浅烘焙">浅烘焙 (Light)</option>
-                <option value="中浅烘焙">中浅烘焙 (Medium-Light)</option>
-                <option value="中度烘焙">中度烘焙 (Medium)</option>
-                <option value="中深烘焙">中深烘焙 (Medium-Dark)</option>
-                <option value="深度烘焙">深度烘焙 (Dark)</option>
-            </select>
-        </div>
-
-        {/* AI Section */}
-        <div className="pt-2">
-            <div className="flex justify-between items-center mb-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">风味描述</label>
-                <button 
-                    onClick={handleGenerateAI}
-                    disabled={isGenerating}
-                    className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded-full flex items-center gap-1 hover:bg-purple-100 transition-colors disabled:opacity-50"
+            <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">烘焙度</label>
+                <select 
+                    name="roastLevel" 
+                    value={bean.roastLevel} 
+                    onChange={handleChange}
+                    className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none bg-white"
                 >
-                    {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
-                    AI 自动生成
-                </button>
+                    <option value="浅烘焙">浅烘焙 (Light)</option>
+                    <option value="中浅烘焙">中浅烘焙 (Med-Light)</option>
+                    <option value="中度烘焙">中度烘焙 (Medium)</option>
+                    <option value="中深烘焙">中深烘焙 (Med-Dark)</option>
+                    <option value="深度烘焙">深度烘焙 (Dark)</option>
+                </select>
             </div>
-            <textarea 
-                name="flavorNotes" 
-                value={bean.flavorNotes} 
-                onChange={handleChange}
-                placeholder="例如: 茉莉花香，桃子，红茶感"
-                rows={3}
-                className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none resize-none"
-            />
         </div>
 
-        <div>
-             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">背景底图 URL</label>
-             <input 
-                type="text" 
-                name="backgroundImageUrl" 
-                value={bean.backgroundImageUrl || ''} 
+        {/* 105x74 Specifics */}
+        {bean.labelSize === '105x74' && (
+            <div className="bg-coffee-50 p-3 rounded-lg border border-coffee-100 space-y-3">
+                 <div className="flex gap-4">
+                    <div className="flex-1">
+                        <label className="block text-xs font-bold text-coffee-800 uppercase tracking-wide mb-1">分类</label>
+                        <div className="flex gap-1">
+                            <button 
+                                onClick={() => onChange({...bean, category: 'filter'})}
+                                className={`flex-1 py-1.5 text-xs rounded border flex items-center justify-center gap-1 ${bean.category === 'filter' ? 'bg-coffee-600 text-white border-coffee-600' : 'bg-white border-coffee-200 text-coffee-700'}`}
+                            >
+                                <Droplets size={12} /> 手冲
+                            </button>
+                            <button 
+                                onClick={() => onChange({...bean, category: 'espresso'})}
+                                className={`flex-1 py-1.5 text-xs rounded border flex items-center justify-center gap-1 ${bean.category === 'espresso' ? 'bg-coffee-600 text-white border-coffee-600' : 'bg-white border-coffee-200 text-coffee-700'}`}
+                            >
+                                <Coffee size={12} /> 意式
+                            </button>
+                        </div>
+                    </div>
+                 </div>
+                 <div className="flex gap-4">
+                     <div className="flex-1">
+                        <label className="block text-xs font-bold text-coffee-800 mb-1">酸度 (Acidity): {bean.acidity || 3}</label>
+                        <input type="range" min="1" max="5" value={bean.acidity || 3} onChange={(e) => onChange({...bean, acidity: parseInt(e.target.value)})} className="w-full accent-coffee-600" />
+                     </div>
+                     <div className="flex-1">
+                        <label className="block text-xs font-bold text-coffee-800 mb-1">苦/醇度 (Body): {bean.bitterness || 3}</label>
+                        <input type="range" min="1" max="5" value={bean.bitterness || 3} onChange={(e) => onChange({...bean, bitterness: parseInt(e.target.value)})} className="w-full accent-coffee-600" />
+                     </div>
+                 </div>
+            </div>
+        )}
+
+        {/* Flavors */}
+        <div className="pt-2">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">风味描述 (中文)</label>
+            <textarea 
+                name="flavorCN" 
+                value={bean.flavorCN} 
                 onChange={handleChange}
-                placeholder="https://..."
-                className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none text-xs"
+                placeholder="例如: 茉莉花，水蜜桃，佛手柑"
+                rows={2}
+                className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none resize-none mb-2"
+            />
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">风味描述 (英文)</label>
+            <input 
+                type="text"
+                name="flavorEN" 
+                value={bean.flavorEN} 
+                onChange={handleChange}
+                placeholder="e.g. Jasmine, Peach, Bergamot"
+                className="w-full border border-gray-200 rounded p-2 focus:ring-2 focus:ring-coffee-400 outline-none italic"
             />
         </div>
       </div>
@@ -161,7 +222,7 @@ export const BeanForm: React.FC<BeanFormProps> = ({ bean, onChange, onSaveTempla
                 <input 
                     type="number" 
                     min="1" 
-                    max="8"
+                    max="99"
                     value={printQty}
                     onChange={(e) => setPrintQty(parseInt(e.target.value) || 1)}
                     className="w-full border border-gray-200 rounded p-2 text-center"

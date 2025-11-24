@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CoffeeBean, PrintJobItem } from '../types';
 import { A4PrintLayout } from './A4PrintLayout';
 import { Label } from './Label';
-import { Printer, Download, Plus, ShoppingBag, X } from 'lucide-react';
+import { Download, Plus, X, AlertTriangle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// Helper for ID generation
 const uid = () => Math.random().toString(36).substr(2, 9);
 
 export const MobileView: React.FC = () => {
@@ -16,8 +15,6 @@ export const MobileView: React.FC = () => {
   const [selectedForAdd, setSelectedForAdd] = useState<CoffeeBean | null>(null);
   const [addQty, setAddQty] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
-  
-  const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('beanTemplates');
@@ -29,10 +26,15 @@ export const MobileView: React.FC = () => {
   const handleAddToQueue = () => {
     if (!selectedForAdd) return;
     
-    const currentCount = printQueue.reduce((acc, item) => acc + item.quantity, 0);
-    if (currentCount + addQty > 8) {
-      alert("A4纸最多8个标签。超出限制。");
-      return;
+    // Check size mismatch
+    const size = selectedForAdd.labelSize || '105x74';
+    if (printQueue.length > 0) {
+         const queueSize = printQueue[0].bean.labelSize || '105x74';
+         if (queueSize !== size) {
+             if (!confirm(`队列中已有 ${queueSize} 标签。添加 ${size} 标签可能导致打印错乱。继续？`)) {
+                 return;
+             }
+         }
     }
 
     setPrintQueue([...printQueue, { 
@@ -47,24 +49,27 @@ export const MobileView: React.FC = () => {
   };
 
   const handleDownloadPDF = async () => {
-    if (!printRef.current) return;
+    const pages = document.querySelectorAll('.print-page');
+    if (pages.length === 0) return;
+
     setIsExporting(true);
-    // Give UI a moment to update
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 100)); // UI update
 
     try {
-      // Temporarily make the print area visible but offscreen if needed, 
-      // but since it's absolute positioned far away, it should be renderable.
-      const canvas = await html2canvas(printRef.current, {
-        scale: 2, // Slightly lower scale for mobile performance
-        useCORS: true,
-        windowWidth: 210 * 3.78 + 100, // Ensure window thinks it's wide enough
-        windowHeight: 297 * 3.78 + 100
-      });
-
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+      
+      for (let i = 0; i < pages.length; i++) {
+          const pageElement = pages[i] as HTMLElement;
+          const canvas = await html2canvas(pageElement, {
+            scale: 2, 
+            useCORS: true
+          });
+          const imgData = canvas.toDataURL('image/png');
+          
+          if (i > 0) pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+      }
+
       pdf.save('coffee-labels-mobile.pdf');
     } catch (err) {
       console.error(err);
@@ -108,11 +113,9 @@ export const MobileView: React.FC = () => {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 pb-24">
         
-        {/* Hidden Print Area */}
-        <div className="fixed top-0 left-[-9999px] overflow-hidden pointer-events-none opacity-0">
-             <div style={{ width: '210mm', height: '297mm', background: 'white' }}>
-                 <A4PrintLayout queue={printQueue} onRemoveItem={() => {}} printRef={printRef} />
-             </div>
+        {/* Hidden Print Area for generation */}
+        <div className="fixed top-0 left-[-9999px] pointer-events-none opacity-0">
+             <A4PrintLayout queue={printQueue} onRemoveItem={() => {}} />
         </div>
 
         {activeTab === 'select' && (
@@ -127,11 +130,16 @@ export const MobileView: React.FC = () => {
                              onClick={() => setSelectedForAdd(t)}
                              className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 active:scale-95 transition-transform"
                         >
-                            <div className="pointer-events-none mb-2 rounded overflow-hidden border border-gray-100">
-                                <Label bean={t} scale={0.85} showBorder={false} />
+                            <div className="pointer-events-none mb-2 rounded overflow-hidden border border-gray-100 bg-gray-50 flex justify-center py-2">
+                                <Label bean={t} scale={0.6} showBorder={false} />
                             </div>
-                            <div className="flex justify-between items-center px-1">
-                                <h3 className="font-bold text-coffee-900">{t.name}</h3>
+                            <div className="flex justify-between items-center px-1 border-t pt-2">
+                                <div>
+                                    <h3 className="font-bold text-coffee-900">{t.nameBold || "未命名"}</h3>
+                                    <p className="text-[10px] text-gray-400">
+                                        {t.labelSize === '60x85' ? '竖版 (60x85)' : '横版 (105x74)'}
+                                    </p>
+                                </div>
                                 <Plus className="text-coffee-500" size={20} />
                             </div>
                         </div>
@@ -150,8 +158,8 @@ export const MobileView: React.FC = () => {
                     printQueue.map(item => (
                         <div key={item.id} className="bg-white p-4 rounded-lg shadow-sm flex justify-between items-center">
                             <div>
-                                <h4 className="font-bold text-coffee-900">{item.bean.name}</h4>
-                                <p className="text-xs text-gray-500">数量: {item.quantity}</p>
+                                <h4 className="font-bold text-coffee-900">{item.bean.nameBold}</h4>
+                                <p className="text-xs text-gray-500">数量: {item.quantity} | 尺寸: {item.bean.labelSize || '105x74'}</p>
                             </div>
                             <button 
                                 onClick={() => setPrintQueue(printQueue.filter(i => i.id !== item.id))}
@@ -161,12 +169,6 @@ export const MobileView: React.FC = () => {
                             </button>
                         </div>
                     ))
-                )}
-                
-                {printQueue.length > 0 && (
-                    <div className="mt-8 bg-coffee-50 p-4 rounded-lg text-center text-coffee-800 text-sm">
-                        当前页占用: {totalLabels} / 8
-                    </div>
                 )}
             </div>
         )}
@@ -180,10 +182,10 @@ export const MobileView: React.FC = () => {
                 disabled={isExporting}
                 className="bg-coffee-800 text-white w-full max-w-md py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 font-bold active:scale-95 transition-all disabled:opacity-70"
               >
-                  {isExporting ? '处理中...' : (
+                  {isExporting ? '生成 PDF 中...' : (
                       <>
                         <Download size={20} />
-                        导出 PDF (A4)
+                        导出 PDF ({totalLabels}个)
                       </>
                   )}
               </button>
@@ -194,8 +196,17 @@ export const MobileView: React.FC = () => {
       {selectedForAdd && (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
               <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in duration-200">
-                  <h3 className="text-lg font-bold text-center mb-4">添加到打印队列</h3>
-                  <div className="mb-2 text-center text-coffee-700 font-medium">{selectedForAdd.name}</div>
+                  <h3 className="text-lg font-bold text-center mb-1">添加到打印队列</h3>
+                  <p className="text-center text-xs text-gray-400 mb-4">尺寸: {selectedForAdd.labelSize || '105x74'}</p>
+                  
+                  {printQueue.length > 0 && (printQueue[0].bean.labelSize || '105x74') !== (selectedForAdd.labelSize || '105x74') && (
+                      <div className="mb-4 bg-amber-50 text-amber-800 text-xs p-2 rounded flex gap-2 items-start">
+                          <AlertTriangle size={16} className="shrink-0" />
+                          <span>当前队列尺寸与该标签不同。建议分开打印。</span>
+                      </div>
+                  )}
+
+                  <div className="mb-2 text-center text-coffee-700 font-medium">{selectedForAdd.nameBold}</div>
                   
                   <div className="flex items-center justify-center gap-4 my-6">
                       <button 
@@ -204,7 +215,7 @@ export const MobileView: React.FC = () => {
                       >-</button>
                       <span className="text-2xl font-bold w-12 text-center">{addQty}</span>
                       <button 
-                        onClick={() => setAddQty(Math.min(8, addQty + 1))}
+                        onClick={() => setAddQty(addQty + 1)}
                         className="w-10 h-10 rounded-full bg-coffee-100 flex items-center justify-center text-xl font-bold text-coffee-700"
                       >+</button>
                   </div>
