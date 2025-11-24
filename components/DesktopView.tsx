@@ -1,0 +1,241 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { CoffeeBean, INITIAL_BEAN, PrintJobItem } from '../types';
+import { BeanForm } from './BeanForm';
+import { TemplateList } from './TemplateList';
+import { Label } from './Label';
+import { A4PrintLayout } from './A4PrintLayout';
+import { Printer, Download, Plus, Save } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
+// Helper for ID generation
+const uid = () => Math.random().toString(36).substr(2, 9);
+
+interface DesktopViewProps {}
+
+export const DesktopView: React.FC<DesktopViewProps> = () => {
+  const [currentBean, setCurrentBean] = useState<CoffeeBean>(INITIAL_BEAN);
+  const [savedTemplates, setSavedTemplates] = useState<CoffeeBean[]>([]);
+  const [printQueue, setPrintQueue] = useState<PrintJobItem[]>([]);
+  const printRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Load templates on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('beanTemplates');
+    if (saved) {
+      setSavedTemplates(JSON.parse(saved));
+    }
+  }, []);
+
+  // Save templates
+  const handleSaveTemplate = () => {
+    if (!currentBean.name) return alert("需要输入名称才能保存模版");
+    
+    // Check if updating existing or new
+    const existingIndex = savedTemplates.findIndex(t => t.id === currentBean.id);
+    let updated;
+    
+    if (existingIndex >= 0) {
+       updated = [...savedTemplates];
+       updated[existingIndex] = currentBean;
+    } else {
+       const newTemplate = { ...currentBean, id: uid() };
+       updated = [...savedTemplates, newTemplate];
+       setCurrentBean(newTemplate); // Switch to editing mode for the new ID
+    }
+    
+    setSavedTemplates(updated);
+    localStorage.setItem('beanTemplates', JSON.stringify(updated));
+    alert("模版已保存!");
+  };
+
+  const handleDeleteTemplate = (id: string) => {
+    if(!confirm("确定要删除这个模版吗？")) return;
+    const updated = savedTemplates.filter(t => t.id !== id);
+    setSavedTemplates(updated);
+    localStorage.setItem('beanTemplates', JSON.stringify(updated));
+    if (currentBean.id === id) {
+        setCurrentBean(INITIAL_BEAN);
+    }
+  };
+
+  const handleSelectTemplate = (bean: CoffeeBean) => {
+    setCurrentBean({ ...bean });
+  };
+
+  const handleAddToPrint = (qty: number) => {
+    const currentCount = printQueue.reduce((acc, item) => acc + item.quantity, 0);
+    if (currentCount + qty > 8) {
+      alert("A4纸一页最多 8 个标签。请减少数量或清空队列。");
+      return;
+    }
+    setPrintQueue([...printQueue, { id: uid(), bean: { ...currentBean }, quantity: qty }]);
+  };
+
+  const handleRemoveFromQueue = (jobId: string) => {
+    setPrintQueue(printQueue.filter(j => j.id !== jobId));
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!printRef.current) return;
+    setIsExporting(true);
+
+    try {
+      const canvas = await html2canvas(printRef.current, {
+        scale: 3, // High resolution for print
+        useCORS: true,
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      const pdfWidth = 210;
+      const pdfHeight = 297;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save('coffee-labels.pdf');
+    } catch (err) {
+      console.error(err);
+      alert("生成 PDF 出错，请检查控制台。");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleClear = () => {
+      setCurrentBean(INITIAL_BEAN);
+  };
+
+  const handleExportData = () => {
+      const dataStr = JSON.stringify(savedTemplates, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+      const exportFileDefaultName = 'bean-templates.json';
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+  };
+
+  const handleImportData = () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json';
+      input.onchange = (e: any) => {
+          const file = e.target.files[0];
+          const reader = new FileReader();
+          reader.onload = (event) => {
+              try {
+                  const json = JSON.parse(event.target?.result as string);
+                  if (Array.isArray(json)) {
+                      setSavedTemplates(json);
+                      localStorage.setItem('beanTemplates', JSON.stringify(json));
+                      alert("导入成功！");
+                  } else {
+                      alert("JSON 格式错误");
+                  }
+              } catch (err) {
+                  alert("无法解析 JSON 文件");
+              }
+          };
+          reader.readAsText(file);
+      };
+      input.click();
+  };
+
+  return (
+    <div className="flex h-screen w-full bg-gray-50 overflow-hidden text-slate-800 font-sans">
+      
+      {/* Sidebar: Templates */}
+      <div className="w-64 border-r border-gray-200 bg-white p-4 hidden md:flex flex-col">
+        <div className="mb-6">
+            <h1 className="font-serif font-black text-2xl text-coffee-800 tracking-tight">BeanLabel<span className="text-coffee-500">Pro</span></h1>
+            <p className="text-xs text-gray-400 mt-1">专业标签制作 (PC端)</p>
+        </div>
+        <button 
+            onClick={handleClear}
+            className="mb-4 w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-lg p-3 text-sm text-gray-500 hover:border-coffee-400 hover:text-coffee-600 transition-all"
+        >
+            <Plus size={16} /> 新建标签
+        </button>
+        <div className="flex-1 overflow-hidden">
+             <TemplateList 
+                templates={savedTemplates} 
+                onSelect={handleSelectTemplate} 
+                onDelete={handleDeleteTemplate} 
+            />
+        </div>
+        <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2 justify-center text-xs text-gray-500">
+             <button onClick={handleExportData} className="hover:underline">导出数据</button>
+             <span>|</span>
+             <button onClick={handleImportData} className="hover:underline">导入数据</button>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden">
+        
+        {/* Editor Column */}
+        <div className="w-full md:w-[400px] lg:w-[450px] p-4 bg-gray-50 border-r border-gray-200 flex flex-col gap-4 overflow-hidden">
+            
+            {/* Live Single Preview */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col items-center justify-center min-h-[300px]">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3 self-start w-full border-b pb-2">实时预览</h3>
+                <div className="transform scale-[0.8] origin-center shadow-lg">
+                    <Label bean={currentBean} />
+                </div>
+            </div>
+
+            {/* Form */}
+            <div className="flex-1 overflow-hidden">
+                <BeanForm 
+                    bean={currentBean} 
+                    onChange={setCurrentBean} 
+                    onSaveTemplate={handleSaveTemplate} 
+                    onAddToPrint={handleAddToPrint}
+                />
+            </div>
+        </div>
+
+        {/* Print Layout / Queue Column */}
+        <div className="flex-1 bg-gray-100 flex flex-col relative">
+            <header className="bg-white border-b border-gray-200 p-4 flex justify-between items-center shadow-sm z-10">
+                <div className="flex items-center gap-2">
+                    <Printer className="text-coffee-600" />
+                    <h2 className="font-bold text-gray-800">打印预览 (A4 排版)</h2>
+                </div>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => setPrintQueue([])} 
+                        className="px-4 py-2 text-sm text-red-500 hover:bg-red-50 rounded font-medium"
+                    >
+                        清空
+                    </button>
+                    <button 
+                        onClick={handleDownloadPDF}
+                        disabled={printQueue.length === 0 || isExporting}
+                        className="flex items-center gap-2 bg-coffee-800 hover:bg-coffee-900 text-white px-6 py-2 rounded-lg font-medium shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isExporting ? '生成中...' : (
+                            <>
+                                <Download size={18} />
+                                导出 PDF
+                            </>
+                        )}
+                    </button>
+                </div>
+            </header>
+
+            <div className="flex-1 overflow-hidden relative">
+                <A4PrintLayout 
+                    queue={printQueue} 
+                    onRemoveItem={handleRemoveFromQueue} 
+                    printRef={printRef}
+                />
+            </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
